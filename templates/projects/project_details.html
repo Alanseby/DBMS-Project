@@ -32,6 +32,17 @@
                     <p class="mt-2">{{ project.Description }}</p>
                 </div>
 
+                {% if milestones %}
+                <div class="mb-3">
+                    <label class="fw-bold mb-2"><i class="fas fa-tasks me-2"></i>Project Progress</label>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100">
+                            <strong>{{ progress }}%</strong>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="row text-muted">
                     <div class="col-md-6">
                         <small><i class="fas fa-calendar me-1"></i> Posted: {{ project.CreatedAt.strftime('%B %d, %Y') }}</small>
@@ -47,14 +58,19 @@
         {% if milestones %}
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="card-title mb-0">Project Milestones</h5>
+                <h5 class="card-title mb-0"><i class="fas fa-flag-checkered me-2"></i>Project Milestones</h5>
             </div>
             <div class="card-body">
                 {% for milestone in milestones %}
-                <div class="border-bottom pb-3 mb-3">
+                <div class="border-bottom pb-3 mb-3 {% if milestone.MilestoneID == next_completable_milestone_id %}bg-light{% endif %}">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <h6 class="mb-1">{{ milestone.Title }}</h6>
+                            <h6 class="mb-1">
+                                {% if milestone.MilestoneID == next_completable_milestone_id and milestone.Status != 'completed' %}
+                                <i class="fas fa-arrow-right text-warning me-1"></i>
+                                {% endif %}
+                                {{ loop.index }}. {{ milestone.Title }}
+                            </h6>
                             <p class="text-muted small mb-2">{{ milestone.Description }}</p>
                         </div>
                         <span class="badge bg-{{ 'success' if milestone.Status == 'completed' else 'warning' if milestone.Status == 'in_progress' else 'secondary' }}">
@@ -69,6 +85,32 @@
                         <strong class="text-primary">${{ milestone.Amount }}</strong>
                         {% endif %}
                     </div>
+                    {% if can_update_milestones and milestone.Status != 'completed' %}
+                        {% if milestone.MilestoneID == next_completable_milestone_id %}
+                        <form method="POST" action="{{ url_for('complete_milestone', milestone_id=milestone.MilestoneID) }}" class="mt-2">
+                            {% if current_user.Role == 'freelancer' %}
+                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this milestone as completed?')">
+                                <i class="fas fa-check-circle me-1"></i>Mark Complete
+                            </button>
+                            {% else %}
+                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Mark this milestone as completed?')">
+                                <i class="fas fa-check-circle me-1"></i>Complete
+                            </button>
+                            {% endif %}
+                        </form>
+                        {% else %}
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-secondary" disabled title="Complete previous milestones first">
+                                <i class="fas fa-lock me-1"></i>Locked
+                            </button>
+                            <small class="text-muted d-block mt-1">Complete previous milestones first</small>
+                        </div>
+                        {% endif %}
+                    {% elif milestone.Status == 'completed' %}
+                    <div class="mt-2">
+                        <span class="badge bg-success"><i class="fas fa-check me-1"></i>Completed</span>
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -108,43 +150,148 @@
     
     <!-- Sidebar -->
     <div class="col-md-4">
-        <!-- Bid Placement (for freelancers) -->
-        <!-- In the project details template, update the bid placement section -->
-{% if current_user.Role == 'freelancer' and project.Status == 'open' %}
-<div class="card mb-4">
-    <div class="card-header bg-success text-white">
-        <h5 class="card-title mb-0">Place Your Bid</h5>
-    </div>
-    <div class="card-body">
-        {% if user_bid %}
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>You've already placed a bid on this project.</strong>
-                <p class="mb-0 mt-1">Your bid: ${{ user_bid.BidAmount }}</p>
-                <p class="mb-0">Status: <span class="badge bg-{{ 'success' if user_bid.Status == 'accepted' else 'warning' }}">{{ user_bid.Status }}</span></p>
+        <!-- Create Milestones (for clients) -->
+        {% if current_user.UserID == project.ClientID %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0"><i class="fas fa-plus-circle me-2"></i>Create Milestones</h5>
             </div>
-        {% else %}
-            <form method="POST" action="{{ url_for('place_bid', project_id=project.ProjectID) }}">
-                <div class="mb-3">
-                    <label for="bid_amount" class="form-label fw-bold">Your Bid Amount ($)</label>
-                    <input type="number" class="form-control" id="bid_amount" name="bid_amount" 
-                           step="0.01" min="1" max="{{ project.Budget * 2 }}" required
-                           placeholder="Enter your bid amount">
-                    <div class="form-text">Project budget: ${{ project.Budget }}</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('create_milestones', project_id=project.ProjectID) }}" id="milestonesForm">
+                    <div id="milestonesContainer">
+                        <div class="milestone-item border rounded p-3 mb-3" data-index="0">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Milestone 1</strong>
+                                <button type="button" class="btn btn-sm btn-danger remove-milestone" style="display:none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Title</label>
+                                <input type="text" name="milestones[0][title]" class="form-control" required>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Description</label>
+                                <textarea name="milestones[0][description]" class="form-control" rows="2"></textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <label class="form-label">Due Date</label>
+                                    <input type="date" name="milestones[0][due_date]" class="form-control" required>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label class="form-label">Amount ($)</label>
+                                    <input type="number" step="0.01" min="0" name="milestones[0][amount]" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-info w-100 mb-2" id="addMilestoneBtn">
+                        <i class="fas fa-plus me-1"></i>Add Another Milestone
+                    </button>
+                    <button type="submit" class="btn btn-info w-100 text-white">
+                        <i class="fas fa-save me-1"></i>Save All Milestones
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <script>
+        let milestoneCount = 1;
+        
+        document.getElementById('addMilestoneBtn').addEventListener('click', function() {
+            const container = document.getElementById('milestonesContainer');
+            const newMilestone = document.createElement('div');
+            newMilestone.className = 'milestone-item border rounded p-3 mb-3';
+            newMilestone.setAttribute('data-index', milestoneCount);
+            newMilestone.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong>Milestone ${milestoneCount + 1}</strong>
+                    <button type="button" class="btn btn-sm btn-danger remove-milestone">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-                <div class="mb-3">
-                    <label for="cover_letter" class="form-label fw-bold">Cover Letter</label>
-                    <textarea class="form-control" id="cover_letter" name="cover_letter" 
-                              rows="4" required placeholder="Why are you the best fit for this project?"></textarea>
+                <div class="mb-2">
+                    <label class="form-label">Title</label>
+                    <input type="text" name="milestones[${milestoneCount}][title]" class="form-control" required>
                 </div>
-                <button type="submit" class="btn btn-success w-100">
-                    <i class="fas fa-paper-plane me-1"></i>Submit Bid
-                </button>
-            </form>
+                <div class="mb-2">
+                    <label class="form-label">Description</label>
+                    <textarea name="milestones[${milestoneCount}][description]" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">Due Date</label>
+                        <input type="date" name="milestones[${milestoneCount}][due_date]" class="form-control" required>
+                    </div>
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label">Amount ($)</label>
+                        <input type="number" step="0.01" min="0" name="milestones[${milestoneCount}][amount]" class="form-control">
+                    </div>
+                </div>
+            `;
+            container.appendChild(newMilestone);
+            milestoneCount++;
+            updateRemoveButtons();
+        });
+        
+        document.getElementById('milestonesContainer').addEventListener('click', function(e) {
+            if (e.target.closest('.remove-milestone')) {
+                e.target.closest('.milestone-item').remove();
+                updateRemoveButtons();
+            }
+        });
+        
+        function updateRemoveButtons() {
+            const items = document.querySelectorAll('.milestone-item');
+            items.forEach((item, index) => {
+                const removeBtn = item.querySelector('.remove-milestone');
+                if (items.length > 1) {
+                    removeBtn.style.display = 'block';
+                } else {
+                    removeBtn.style.display = 'none';
+                }
+            });
+        }
+        </script>
         {% endif %}
-    </div>
-</div>
-{% endif %}
+
+        <!-- Bid Placement (for freelancers) -->
+        {% if current_user.Role == 'freelancer' and project.Status == 'open' %}
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Place Your Bid</h5>
+            </div>
+            <div class="card-body">
+                {% if user_bid %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>You've already placed a bid on this project.</strong>
+                        <p class="mb-0 mt-1">Your bid: ${{ user_bid.BidAmount }}</p>
+                        <p class="mb-0">Status: <span class="badge bg-{{ 'success' if user_bid.Status == 'accepted' else 'warning' }}">{{ user_bid.Status }}</span></p>
+                    </div>
+                {% else %}
+                    <form method="POST" action="{{ url_for('place_bid', project_id=project.ProjectID) }}">
+                        <div class="mb-3">
+                            <label for="bid_amount" class="form-label fw-bold">Your Bid Amount ($)</label>
+                            <input type="number" class="form-control" id="bid_amount" name="bid_amount" 
+                                   step="0.01" min="1" max="{{ project.Budget * 2 }}" required
+                                   placeholder="Enter your bid amount">
+                            <div class="form-text">Project budget: ${{ project.Budget }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="cover_letter" class="form-label fw-bold">Cover Letter</label>
+                            <textarea class="form-control" id="cover_letter" name="cover_letter" 
+                                      rows="4" required placeholder="Why are you the best fit for this project?"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-paper-plane me-1"></i>Submit Bid
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Bids Overview -->
         <div class="card mb-4">

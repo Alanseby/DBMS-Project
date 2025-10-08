@@ -180,7 +180,6 @@ def create_project():
         
         db.session.add(new_project)
         db.session.commit()
-        
         flash('Project created successfully!', 'success')
         return redirect(url_for('client_dashboard'))
     
@@ -192,20 +191,51 @@ def project_details(project_id):
     project = Project.query.get_or_404(project_id)
     bids = Bid.query.filter_by(ProjectID=project_id).all()
     milestones = Milestone.query.filter_by(ProjectID=project_id).all()
+
+    # Order milestones by creation order
+    milestones = Milestone.query.filter_by(ProjectID=project_id).order_by(Milestone.MilestoneID).all()
     
+    # Compute progress based on milestone count
+    progress = 0
+    if milestones:
+        completed_milestones = [m for m in milestones if m.Status == 'completed']
+        progress = int((len(completed_milestones) / len(milestones)) * 100)
+
+    # Find next milestone that can be completed (first non-completed one)
+    next_completable_milestone_id = None
+    if milestones:
+        for milestone in milestones:
+            if milestone.Status != 'completed':
+                next_completable_milestone_id = milestone.MilestoneID
+                break
+
     # Check if current user has already bid on this project
     user_bid = None
     if current_user.Role == 'freelancer':
         user_bid = Bid.query.filter_by(
-            ProjectID=project_id, 
+            ProjectID=project_id,
             FreelancerID=current_user.UserID
         ).first()
-    
-    return render_template('projects/project_details.html', 
-                         project=project, 
-                         bids=bids,
-                         milestones=milestones,
-                         user_bid=user_bid)
+
+    # Authorization flag for milestone status updates
+    can_update_milestones = False
+    if current_user.UserID == project.ClientID:
+        can_update_milestones = True
+    elif current_user.Role == 'freelancer':
+        accepted_bid = Bid.query.filter_by(ProjectID=project.ProjectID, FreelancerID=current_user.UserID, Status='accepted').first()
+        if accepted_bid:
+            can_update_milestones = True
+
+    return render_template(
+        'projects/project_details.html',
+        project=project,
+        bids=bids,
+        milestones=milestones,
+        progress=progress,
+        can_update_milestones=can_update_milestones,
+        next_completable_milestone_id=next_completable_milestone_id,
+        user_bid=user_bid
+    )
 
 @app.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -343,35 +373,48 @@ def accept_bid(project_id, bid_id):
 
 @app.route('/projects/<int:project_id>/milestones/create', methods=['POST'])
 @login_required
-def create_milestone(project_id):
+def create_milestones(project_id):
     project = Project.query.get_or_404(project_id)
     
     if project.ClientID != current_user.UserID:
         flash('Access denied!', 'error')
         return redirect(url_for('project_details', project_id=project_id))
     
-    title = request.form['title']
-    description = request.form['description']
-    due_date = request.form['due_date']
-    amount = request.form['amount']
+    # Get all milestone data from form
+    milestone_count = 0
+    index = 0
     
-    milestone = Milestone(
-        ProjectID=project_id,
-        Title=title,
-        Description=description,
-        DueDate=datetime.strptime(due_date, '%Y-%m-%d').date(),
-        Amount=amount
-    )
+    while True:
+        title_key = f'milestones[{index}][title]'
+        if title_key not in request.form:
+            break
+            
+        title = request.form[title_key]
+        description = request.form.get(f'milestones[{index}][description]', '')
+        due_date = request.form[f'milestones[{index}][due_date]']
+        amount = request.form.get(f'milestones[{index}][amount]', 0)
+        
+        milestone = Milestone(
+            ProjectID=project_id,
+            Title=title,
+            Description=description,
+            DueDate=datetime.strptime(due_date, '%Y-%m-%d').date(),
+            Amount=amount if amount else None,
+            Status='pending'
+        )
+        
+        db.session.add(milestone)
+        milestone_count += 1
+        index += 1
     
-    db.session.add(milestone)
     db.session.commit()
     
-    flash('Milestone created successfully!', 'success')
+    flash(f'{milestone_count} milestone(s) created successfully!', 'success')
     return redirect(url_for('project_details', project_id=project_id))
 
-@app.route('/milestones/<int:milestone_id>/update_status', methods=['POST'])
+@app.route('/milestones/<int:milestone_id>/complete', methods=['POST'])
 @login_required
-def update_milestone_status(milestone_id):
+def complete_milestone(milestone_id):
     milestone = Milestone.query.get_or_404(milestone_id)
     project = milestone.project
     
@@ -386,10 +429,35 @@ def update_milestone_status(milestone_id):
             flash('Access denied!', 'error')
             return redirect(url_for('project_details', project_id=project.ProjectID))
     
-    milestone.Status = request.form['status']
+    # Get all milestones ordered by creation (MilestoneID)
+    all_milestones = Milestone.query.filter_by(ProjectID=project.ProjectID).order_by(Milestone.MilestoneID).all()
+    
+    # Check if this milestone can be completed (sequential order)
+    milestone_index = next((i for i, m in enumerate(all_milestones) if m.MilestoneID == milestone_id), None)
+    
+    if milestone_index is not None:
+        # Check if all previous milestones are completed
+        if milestone_index > 0:
+            previous_milestones = all_milestones[:milestone_index]
+            if not all(m.Status == 'completed' for m in previous_milestones):
+                flash('⚠️ You must complete previous milestones first! Milestones must be completed in order.', 'warning')
+                return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    milestone.Status = 'completed'
+    
+    # Check if all milestones are completed
+    if all_milestones:
+        all_completed = all(m.Status == 'completed' for m in all_milestones)
+        if all_completed and project.Status == 'in_progress':
+            project.Status = 'completed'
+            flash('🎉 All milestones completed! Project marked as completed!', 'success')
+        else:
+            flash('✅ Milestone marked as completed!', 'success')
+    else:
+        flash('✅ Milestone marked as completed!', 'success')
+    
     db.session.commit()
     
-    flash('Milestone status updated!', 'success')
     return redirect(url_for('project_details', project_id=project.ProjectID))
 
 # ========================
