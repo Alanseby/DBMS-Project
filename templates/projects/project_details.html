@@ -417,7 +417,7 @@
                                 {{ bid.Status }}
                             </span>
                         </div>
-                        {% if freelancer_ratings[bid.FreelancerID].count > 0 %}
+                        {% if bid.FreelancerID in freelancer_ratings and freelancer_ratings[bid.FreelancerID].count > 0 %}
                         <div class="mb-1">
                             <span class="text-warning">
                                 {% for i in range(freelancer_ratings[bid.FreelancerID].average|int) %}
@@ -510,7 +510,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ bid.freelancer.Name }}</strong>
-                            {% if freelancer_ratings[bid.FreelancerID].count > 0 %}
+                            {% if bid.FreelancerID in freelancer_ratings and freelancer_ratings[bid.FreelancerID].count > 0 %}
                             <br>
                             <span class="text-warning">
                                 {% for i in range(freelancer_ratings[bid.FreelancerID].average|int) %}
