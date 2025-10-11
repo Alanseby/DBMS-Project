@@ -226,6 +226,22 @@ def project_details(project_id):
         if accepted_bid:
             can_update_milestones = True
 
+    # Calculate average ratings for each freelancer who bid
+    freelancer_ratings = {}
+    for bid in bids:
+        reviews = Review.query.filter_by(RevieweeID=bid.FreelancerID).all()
+        if reviews:
+            avg_rating = sum(r.Rating for r in reviews) / len(reviews)
+            freelancer_ratings[bid.FreelancerID] = {
+                'average': round(avg_rating, 1),
+                'count': len(reviews)
+            }
+        else:
+            freelancer_ratings[bid.FreelancerID] = {
+                'average': 0,
+                'count': 0
+            }
+
     return render_template(
         'projects/project_details.html',
         project=project,
@@ -234,7 +250,8 @@ def project_details(project_id):
         progress=progress,
         can_update_milestones=can_update_milestones,
         next_completable_milestone_id=next_completable_milestone_id,
-        user_bid=user_bid
+        user_bid=user_bid,
+        freelancer_ratings=freelancer_ratings
     )
 
 @app.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])
@@ -479,6 +496,22 @@ def view_profile():
                          user=user, 
                          freelancer_profile=freelancer_profile,
                          reviews_received=reviews_received)
+
+@app.route('/users/<int:user_id>')
+@login_required
+def public_profile(user_id):
+    user_obj = User.query.get_or_404(user_id)
+    freelancer_profile = None
+    reviews_received = []
+    if user_obj.Role == 'freelancer':
+        freelancer_profile = FreelancerProfile.query.filter_by(FreelancerID=user_obj.UserID).first()
+        reviews_received = Review.query.filter_by(RevieweeID=user_obj.UserID).all()
+    return render_template(
+        'profile/public_profile.html',
+        user=user_obj,
+        freelancer_profile=freelancer_profile,
+        reviews_received=reviews_received
+    )
 
 @app.route('/profile/edit', methods=['GET', 'POST'])
 @login_required

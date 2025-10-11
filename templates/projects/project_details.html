@@ -294,7 +294,7 @@
         {% endif %}
 
         <!-- Bids Overview -->
-        <div class="card mb-4">
+        <div class="card mb-4" id="bids">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     Bids ({{ bids|length }})
@@ -308,11 +308,36 @@
                     {% for bid in bids %}
                     <div class="border-bottom pb-2 mb-2">
                         <div class="d-flex justify-content-between align-items-start mb-1">
-                            <strong>{{ bid.freelancer.Name }}</strong>
+                            <div>
+                                <strong>{{ bid.freelancer.Name }}</strong>
+                                <a class="btn btn-sm btn-outline-info ms-2" href="{{ url_for('public_profile', user_id=bid.freelancer.UserID) }}">
+                                    <i class="fas fa-user me-1"></i>View Profile
+                                </a>
+                            </div>
                             <span class="badge bg-{{ 'success' if bid.Status == 'accepted' else 'warning' if bid.Status == 'pending' else 'secondary' }}">
                                 {{ bid.Status }}
                             </span>
                         </div>
+                        {% if freelancer_ratings[bid.FreelancerID].count > 0 %}
+                        <div class="mb-1">
+                            <span class="text-warning">
+                                {% for i in range(freelancer_ratings[bid.FreelancerID].average|int) %}
+                                <i class="fas fa-star"></i>
+                                {% endfor %}
+                                {% if freelancer_ratings[bid.FreelancerID].average % 1 >= 0.5 %}
+                                <i class="fas fa-star-half-alt"></i>
+                                {% endif %}
+                                {% for i in range(5 - (freelancer_ratings[bid.FreelancerID].average|int + (1 if freelancer_ratings[bid.FreelancerID].average % 1 >= 0.5 else 0))) %}
+                                <i class="far fa-star"></i>
+                                {% endfor %}
+                            </span>
+                            <small class="text-muted ms-1">{{ freelancer_ratings[bid.FreelancerID].average }}/5 ({{ freelancer_ratings[bid.FreelancerID].count }} reviews)</small>
+                        </div>
+                        {% else %}
+                        <div class="mb-1">
+                            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>No reviews yet</small>
+                        </div>
+                        {% endif %}
                         <p class="mb-1 text-primary fw-bold">${{ bid.BidAmount }}</p>
                         <p class="small text-muted mb-2">{{ bid.CoverLetter[:80] }}...</p>
                         <small class="text-muted">{{ bid.BidDate.strftime('%b %d, %Y') }}</small>
@@ -386,8 +411,27 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ bid.freelancer.Name }}</strong>
+                            {% if freelancer_ratings[bid.FreelancerID].count > 0 %}
+                            <br>
+                            <span class="text-warning">
+                                {% for i in range(freelancer_ratings[bid.FreelancerID].average|int) %}
+                                <i class="fas fa-star"></i>
+                                {% endfor %}
+                                {% if freelancer_ratings[bid.FreelancerID].average % 1 >= 0.5 %}
+                                <i class="fas fa-star-half-alt"></i>
+                                {% endif %}
+                                {% for i in range(5 - (freelancer_ratings[bid.FreelancerID].average|int + (1 if freelancer_ratings[bid.FreelancerID].average % 1 >= 0.5 else 0))) %}
+                                <i class="far fa-star"></i>
+                                {% endfor %}
+                            </span>
+                            <small class="text-muted ms-1">{{ freelancer_ratings[bid.FreelancerID].average }}/5</small>
+                            {% endif %}
                             <br>
                             <span class="text-primary">${{ bid.BidAmount }}</span>
+                            <br>
+                            <a class="btn btn-sm btn-outline-info mt-1" href="{{ url_for('public_profile', user_id=bid.freelancer.UserID) }}">
+                                <i class="fas fa-user me-1"></i>View Profile
+                            </a>
                         </div>
                         <a href="{{ url_for('accept_bid', project_id=project.ProjectID, bid_id=bid.BidID) }}" 
                            class="btn btn-success btn-sm"
