@@ -60,9 +60,10 @@ class Milestone(db.Model):
     ProjectID = db.Column(db.Integer, db.ForeignKey('Projects.ProjectID'), nullable=False)
     Title = db.Column(db.String(150), nullable=False)
     Description = db.Column(db.Text)
-    Status = db.Column(db.String(20), default='pending')
+    Status = db.Column(db.String(20), default='pending')  # pending, submitted, completed
     DueDate = db.Column(db.Date)
     Amount = db.Column(db.Numeric(10, 2))
+    SubmissionLink = db.Column(db.String(500))  # Link submitted by freelancer
 
 class Review(db.Model):
     __tablename__ = 'Reviews'

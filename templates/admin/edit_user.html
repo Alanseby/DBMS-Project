@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - Admin - FPRMS{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="card-title mb-0">
+                        <i class="fas fa-user-edit me-2"></i>Edit User - {{ user.Name }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Admin Access:</strong> You are editing user #{{ user.UserID }}
+                    </div>
+
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="name" class="form-label fw-bold">
+                                <i class="fas fa-user me-1"></i>Full Name
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ user.Name }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label fw-bold">
+                                <i class="fas fa-envelope me-1"></i>Email Address
+                            </label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ user.Email }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="role" class="form-label fw-bold">
+                                <i class="fas fa-user-tag me-1"></i>User Role
+                            </label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="client" {% if user.Role == 'client' %}selected{% endif %}>Client</option>
+                                <option value="freelancer" {% if user.Role == 'freelancer' %}selected{% endif %}>Freelancer</option>
+                                <option value="admin" {% if user.Role == 'admin' %}selected{% endif %}>Admin</option>
+                            </select>
+                            <small class="text-muted">Be careful when changing user roles</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-info-circle me-1"></i>Account Information
+                            </label>
+                            <p class="form-control-plaintext">
+                                <strong>User ID:</strong> #{{ user.UserID }}<br>
+                                <strong>Joined:</strong> {{ user.CreatedAt.strftime('%B %d, %Y at %I:%M %p') }}
+                            </p>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save Changes
+                            </button>
+                            <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </a>
+                            <a href="{{ url_for('public_profile', user_id=user.UserID) }}" class="btn btn-info ms-auto">
+                                <i class="fas fa-eye me-1"></i>View Profile
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if user.Role == 'freelancer' and user.freelancer_profile %}
+            <div class="card mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-briefcase me-2"></i>Freelancer Profile
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Skills:</strong> {{ user.freelancer_profile.Skills }}</p>
+                    <p><strong>Experience:</strong> {{ user.freelancer_profile.Experience }}</p>
+                    {% if user.freelancer_profile.PortfolioURL %}
+                    <p><strong>Portfolio:</strong> <a href="{{ user.freelancer_profile.PortfolioURL }}" target="_blank">{{ user.freelancer_profile.PortfolioURL }}</a></p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

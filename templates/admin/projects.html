@@ -78,13 +78,15 @@
                                    class="btn btn-sm btn-outline-primary" title="View Project">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <button class="btn btn-sm btn-outline-info" title="Project Info">
+                                <button class="btn btn-sm btn-outline-info" title="Project Info" 
+                                        data-bs-toggle="modal" data-bs-target="#projectInfoModal{{ project.ProjectID }}">
                                     <i class="fas fa-info"></i>
                                 </button>
                                 {% if project.Status != 'completed' %}
-                                <button class="btn btn-sm btn-outline-warning" title="Edit Project">
+                                <a href="{{ url_for('edit_project', project_id=project.ProjectID) }}" 
+                                   class="btn btn-sm btn-outline-warning" title="Edit Project">
                                     <i class="fas fa-edit"></i>
-                                </button>
+                                </a>
                                 {% endif %}
                             </div>
                         </td>
@@ -145,19 +147,62 @@
                 <p class="text-muted">Total Project Value</p>
             </div>
             <div class="col-md-4">
-                <h4 class="text-success">{{ projects|selectattr('bids')|map(attribute='bids')|sum|length }}</h4>
+                {% set total_bids = namespace(count=0) %}
+                {% for project in projects %}
+                    {% set total_bids.count = total_bids.count + project.bids|length %}
+                {% endfor %}
+                <h4 class="text-success">{{ total_bids.count }}</h4>
                 <p class="text-muted">Total Bids Placed</p>
             </div>
             <div class="col-md-4">
-                <h4 class="text-info">
-                    {% set active_projects = projects|selectattr('Status', 'equalto', 'open')|list + projects|selectattr('Status', 'equalto', 'in_progress')|list %}
-                    {{ active_projects|length }}
-                </h4>
+                {% set active_projects = projects|selectattr('Status', 'equalto', 'open')|list + projects|selectattr('Status', 'equalto', 'in_progress')|list %}
+                <h4 class="text-info">{{ active_projects|length }}</h4>
                 <p class="text-muted">Active Projects</p>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Project Info Modals -->
+{% for project in projects %}
+<div class="modal fade" id="projectInfoModal{{ project.ProjectID }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">Project Details - #{{ project.ProjectID }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h5>{{ project.Title }}</h5>
+                <p class="text-muted">{{ project.Description }}</p>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <p><strong>Client:</strong> {{ project.client.Name }}</p>
+                        <p><strong>Budget:</strong> ${{ project.Budget }}</p>
+                        <p><strong>Status:</strong> 
+                            <span class="badge bg-{{ 'success' if project.Status == 'open' else 'warning' if project.Status == 'in_progress' else 'info' }}">
+                                {{ project.Status|replace('_', ' ')|title }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Bids:</strong> {{ project.bids|length }}</p>
+                        <p><strong>Milestones:</strong> {{ project.milestones|length }}</p>
+                        <p><strong>Created:</strong> {{ project.CreatedAt.strftime('%B %d, %Y') }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ url_for('project_details', project_id=project.ProjectID) }}" class="btn btn-primary">
+                    <i class="fas fa-eye me-1"></i>View Full Details
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 
 <style>
 .avatar-circle {

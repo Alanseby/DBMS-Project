@@ -24,21 +24,41 @@
 
                 <!-- Quick Stats -->
                 <div class="card mt-4">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">Project Stats</h6>
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="card-title mb-0"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h6>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <small class="text-muted">Active Projects</small>
-                            <h5 class="mb-0">{{ active_projects|length }}</h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-folder-open me-1"></i>Active Projects</small>
+                            <h4 class="mb-0 text-primary">{{ active_projects|length }}</h4>
                         </div>
-                        <div class="mb-3">
-                            <small class="text-muted">Completed</small>
-                            <h5 class="mb-0">{{ completed_projects|length }}</h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-check-circle me-1"></i>Completed</small>
+                            <h4 class="mb-0 text-success">{{ completed_projects|length }}</h4>
                         </div>
-                        <div>
-                            <small class="text-muted">Total Projects</small>
-                            <h5 class="mb-0">{{ projects|length }}</h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-file-invoice-dollar me-1"></i>Total Bids</small>
+                            {% set total_bids = namespace(count=0) %}
+                            {% for project in projects %}
+                                {% set total_bids.count = total_bids.count + project.bids|length %}
+                            {% endfor %}
+                            <h4 class="mb-0 text-info">{{ total_bids.count }}</h4>
+                        </div>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-dollar-sign me-1"></i>Total Budget</small>
+                            <h4 class="mb-0 text-warning">${{ "%.2f"|format(projects|sum(attribute='Budget')) }}</h4>
+                        </div>
+                        <div class="p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-money-bill-wave me-1"></i>Total Spent</small>
+                            {% set total_spent = namespace(amount=0) %}
+                            {% for project in projects %}
+                                {% for bid in project.bids %}
+                                    {% if bid.Status == 'accepted' %}
+                                        {% set total_spent.amount = total_spent.amount + bid.BidAmount %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            <h4 class="mb-0 text-danger">${{ "%.2f"|format(total_spent.amount) }}</h4>
                         </div>
                     </div>
                 </div>

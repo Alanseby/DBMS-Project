@@ -242,6 +242,20 @@ def project_details(project_id):
                 'count': 0
             }
 
+    # Get accepted freelancer and check if client has reviewed them
+    accepted_freelancer = None
+    client_review = None
+    accepted_bid = Bid.query.filter_by(ProjectID=project_id, Status='accepted').first()
+    if accepted_bid:
+        accepted_freelancer = accepted_bid.freelancer
+        # Check if client has already reviewed this freelancer for this project
+        if current_user.UserID == project.ClientID:
+            client_review = Review.query.filter_by(
+                ProjectID=project_id,
+                ReviewerID=current_user.UserID,
+                RevieweeID=accepted_freelancer.UserID
+            ).first()
+
     return render_template(
         'projects/project_details.html',
         project=project,
@@ -251,7 +265,9 @@ def project_details(project_id):
         can_update_milestones=can_update_milestones,
         next_completable_milestone_id=next_completable_milestone_id,
         user_bid=user_bid,
-        freelancer_ratings=freelancer_ratings
+        freelancer_ratings=freelancer_ratings,
+        accepted_freelancer=accepted_freelancer,
+        client_review=client_review
     )
 
 @app.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])
@@ -409,14 +425,12 @@ def create_milestones(project_id):
         title = request.form[title_key]
         description = request.form.get(f'milestones[{index}][description]', '')
         due_date = request.form[f'milestones[{index}][due_date]']
-        amount = request.form.get(f'milestones[{index}][amount]', 0)
         
         milestone = Milestone(
             ProjectID=project_id,
             Title=title,
             Description=description,
             DueDate=datetime.strptime(due_date, '%Y-%m-%d').date(),
-            Amount=amount if amount else None,
             Status='pending'
         )
         
@@ -429,27 +443,73 @@ def create_milestones(project_id):
     flash(f'{milestone_count} milestone(s) created successfully!', 'success')
     return redirect(url_for('project_details', project_id=project_id))
 
-@app.route('/milestones/<int:milestone_id>/complete', methods=['POST'])
+@app.route('/milestones/<int:milestone_id>/edit', methods=['GET', 'POST'])
 @login_required
-def complete_milestone(milestone_id):
+def edit_milestone(milestone_id):
+    """Client edits a milestone"""
     milestone = Milestone.query.get_or_404(milestone_id)
     project = milestone.project
     
-    # Check if user is client or assigned freelancer
-    if current_user.UserID not in [project.ClientID]:
-        if current_user.Role == 'freelancer':
-            accepted_bid = Bid.query.filter_by(ProjectID=project.ProjectID, FreelancerID=current_user.UserID, Status='accepted').first()
-            if not accepted_bid:
-                flash('Access denied!', 'error')
-                return redirect(url_for('project_details', project_id=project.ProjectID))
-        else:
-            flash('Access denied!', 'error')
-            return redirect(url_for('project_details', project_id=project.ProjectID))
+    # Only client can edit milestones
+    if current_user.UserID != project.ClientID:
+        flash('Only the client can edit milestones!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    if request.method == 'POST':
+        milestone.Title = request.form['title']
+        milestone.Description = request.form.get('description', '')
+        milestone.DueDate = datetime.strptime(request.form['due_date'], '%Y-%m-%d').date()
+        
+        db.session.commit()
+        flash('✅ Milestone updated successfully!', 'success')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    return render_template('milestones/edit_milestone.html', milestone=milestone, project=project)
+
+@app.route('/milestones/<int:milestone_id>/delete', methods=['POST'])
+@login_required
+def delete_milestone(milestone_id):
+    """Client deletes a milestone"""
+    milestone = Milestone.query.get_or_404(milestone_id)
+    project = milestone.project
+    
+    # Only client can delete milestones
+    if current_user.UserID != project.ClientID:
+        flash('Only the client can delete milestones!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    # Don't allow deletion of completed or submitted milestones
+    if milestone.Status in ['submitted', 'completed']:
+        flash('Cannot delete submitted or completed milestones!', 'warning')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    db.session.delete(milestone)
+    db.session.commit()
+    
+    flash('🗑️ Milestone deleted successfully!', 'success')
+    return redirect(url_for('project_details', project_id=project.ProjectID))
+
+@app.route('/milestones/<int:milestone_id>/submit', methods=['POST'])
+@login_required
+def submit_milestone(milestone_id):
+    """Freelancer submits a link for milestone completion"""
+    milestone = Milestone.query.get_or_404(milestone_id)
+    project = milestone.project
+    
+    # Only assigned freelancer can submit
+    if current_user.Role != 'freelancer':
+        flash('Only freelancers can submit milestone work!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    accepted_bid = Bid.query.filter_by(ProjectID=project.ProjectID, FreelancerID=current_user.UserID, Status='accepted').first()
+    if not accepted_bid:
+        flash('Access denied!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
     
     # Get all milestones ordered by creation (MilestoneID)
     all_milestones = Milestone.query.filter_by(ProjectID=project.ProjectID).order_by(Milestone.MilestoneID).all()
     
-    # Check if this milestone can be completed (sequential order)
+    # Check if this milestone can be submitted (sequential order)
     milestone_index = next((i for i, m in enumerate(all_milestones) if m.MilestoneID == milestone_id), None)
     
     if milestone_index is not None:
@@ -460,9 +520,39 @@ def complete_milestone(milestone_id):
                 flash('⚠️ You must complete previous milestones first! Milestones must be completed in order.', 'warning')
                 return redirect(url_for('project_details', project_id=project.ProjectID))
     
+    submission_link = request.form.get('submission_link', '').strip()
+    if not submission_link:
+        flash('Please provide a submission link!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    milestone.SubmissionLink = submission_link
+    milestone.Status = 'submitted'
+    db.session.commit()
+    
+    flash('✅ Milestone submitted for review!', 'success')
+    return redirect(url_for('project_details', project_id=project.ProjectID))
+
+@app.route('/milestones/<int:milestone_id>/complete', methods=['POST'])
+@login_required
+def complete_milestone(milestone_id):
+    """Client marks milestone as complete after reviewing submission"""
+    milestone = Milestone.query.get_or_404(milestone_id)
+    project = milestone.project
+    
+    # Only client can mark as complete
+    if current_user.UserID != project.ClientID:
+        flash('Only the client can mark milestones as complete!', 'error')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
+    # Check if milestone has been submitted
+    if milestone.Status != 'submitted':
+        flash('Milestone must be submitted by freelancer before it can be marked complete!', 'warning')
+        return redirect(url_for('project_details', project_id=project.ProjectID))
+    
     milestone.Status = 'completed'
     
     # Check if all milestones are completed
+    all_milestones = Milestone.query.filter_by(ProjectID=project.ProjectID).order_by(Milestone.MilestoneID).all()
     if all_milestones:
         all_completed = all(m.Status == 'completed' for m in all_milestones)
         if all_completed and project.Status == 'in_progress':
@@ -610,6 +700,44 @@ def admin_projects():
     
     projects = Project.query.all()
     return render_template('admin/projects.html', projects=projects)
+
+@app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    if current_user.Role != 'admin':
+        flash('Access denied!', 'error')
+        return redirect(url_for('index'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    if request.method == 'POST':
+        user.Name = request.form['name']
+        user.Email = request.form['email']
+        user.Role = request.form['role']
+        
+        db.session.commit()
+        flash('✅ User updated successfully!', 'success')
+        return redirect(url_for('admin_users'))
+    
+    return render_template('admin/edit_user.html', user=user)
+
+@app.route('/admin/users/<int:user_id>/suspend', methods=['POST'])
+@login_required
+def admin_suspend_user(user_id):
+    if current_user.Role != 'admin':
+        flash('Access denied!', 'error')
+        return redirect(url_for('index'))
+    
+    user = User.query.get_or_404(user_id)
+    
+    # Prevent suspending yourself
+    if user.UserID == current_user.UserID:
+        flash('⚠️ You cannot suspend yourself!', 'warning')
+        return redirect(url_for('admin_users'))
+    
+    # For now, we'll just show a message (you can add a Suspended field to User model later)
+    flash(f'🚫 User {user.Name} has been suspended (feature in development)', 'info')
+    return redirect(url_for('admin_users'))
 
 # ========================
 # ERROR HANDLERS

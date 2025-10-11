@@ -24,27 +24,27 @@
 
                 <!-- Quick Stats -->
                 <div class="card mt-4">
-                    <div class="card-header">
-                        <h6 class="card-title mb-0">Quick Stats</h6>
+                    <div class="card-header bg-success text-white">
+                        <h6 class="card-title mb-0"><i class="fas fa-chart-line me-2"></i>Quick Stats</h6>
                     </div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <small class="text-muted">Active Bids</small>
-                            <h5 class="mb-0">
-                                {% set pending_bids = bids|selectattr('Status', 'equalto', 'pending')|list %}
-                                {{ pending_bids|length }}
-                            </h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-hourglass-half me-1"></i>Active Bids</small>
+                            {% set pending_bids = bids|selectattr('Status', 'equalto', 'pending')|list %}
+                            <h4 class="mb-0 text-warning">{{ pending_bids|length }}</h4>
                         </div>
-                        <div class="mb-3">
-                            <small class="text-muted">Projects Won</small>
-                            <h5 class="mb-0">
-                                {% set accepted_bids = bids|selectattr('Status', 'equalto', 'accepted')|list %}
-                                {{ accepted_bids|length }}
-                            </h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-trophy me-1"></i>Projects Won</small>
+                            {% set accepted_bids = bids|selectattr('Status', 'equalto', 'accepted')|list %}
+                            <h4 class="mb-0 text-success">{{ accepted_bids|length }}</h4>
                         </div>
-                        <div>
-                            <small class="text-muted">Open Projects</small>
-                            <h5 class="mb-0">{{ open_projects|length }}</h5>
+                        <div class="mb-3 p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-tasks me-1"></i>Total Bids</small>
+                            <h4 class="mb-0 text-info">{{ bids|length }}</h4>
+                        </div>
+                        <div class="p-2 bg-light rounded">
+                            <small class="text-muted d-block"><i class="fas fa-folder-open me-1"></i>Open Projects</small>
+                            <h4 class="mb-0 text-primary">{{ open_projects|length }}</h4>
                         </div>
                     </div>
                 </div>
