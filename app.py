@@ -715,29 +715,18 @@ def admin_edit_user(user_id):
         user.Email = request.form['email']
         user.Role = request.form['role']
         
+        # Update password if provided
+        new_password = request.form.get('password', '').strip()
+        if new_password:
+            user.Password = generate_password_hash(new_password)
+            flash('✅ User updated successfully! Password has been changed.', 'success')
+        else:
+            flash('✅ User updated successfully!', 'success')
+        
         db.session.commit()
-        flash('✅ User updated successfully!', 'success')
         return redirect(url_for('admin_users'))
     
     return render_template('admin/edit_user.html', user=user)
-
-@app.route('/admin/users/<int:user_id>/suspend', methods=['POST'])
-@login_required
-def admin_suspend_user(user_id):
-    if current_user.Role != 'admin':
-        flash('Access denied!', 'error')
-        return redirect(url_for('index'))
-    
-    user = User.query.get_or_404(user_id)
-    
-    # Prevent suspending yourself
-    if user.UserID == current_user.UserID:
-        flash('⚠️ You cannot suspend yourself!', 'warning')
-        return redirect(url_for('admin_users'))
-    
-    # For now, we'll just show a message (you can add a Suspended field to User model later)
-    flash(f'🚫 User {user.Name} has been suspended (feature in development)', 'info')
-    return redirect(url_for('admin_users'))
 
 # ========================
 # ERROR HANDLERS
