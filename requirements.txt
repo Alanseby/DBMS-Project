@@ -5,3 +5,6 @@ Flask-WTF==1.1.1
 WTForms==3.0.1
 PyMySQL==1.1.0
 python-dotenv==1.0.0
+# PostgreSQL driver - use pg8000 for Windows compatibility
+pg8000==1.30.3
+gunicorn==21.2.0
